@@ -40,14 +40,14 @@
 
 Fault-tolerant quantum computation must support universal circuits while keeping the overhead of quantum error correction (QEC) manageable. Stabilizer circuits, composed of Clifford operations, Pauli measurements, and stabilizer-state preparation, are attractive because they can be simulated efficiently on a classical computer. Stim is a high-performance stabilizer circuit simulator designed for this regime~\cite{gidney2021stim}, while LightStim provides higher-level QEC abstractions built around stabilizer simulation.
 
-The main challenge is that a universal quantum circuit also requires non-Clifford operations. In the commonly used Clifford+T gate set, the T gate is the essential non-Clifford resource. T gates cannot be handled directly by the standard stabilizer formalism, and in fault-tolerant implementations they are commonly realized through magic-state injection and distillation~\cite{litinski2019magic}. Therefore, an efficient simulation workflow should exploit stabilizer simulation for the Clifford portion of a circuit while isolating the remaining non-Clifford resources.
+The main challenge is that a universal quantum circuit also requires non-Clifford operations. In the commonly used Clifford and T gate set, the T gate is the essential non-Clifford resource. T gates cannot be handled directly by the standard stabilizer formalism, and in fault-tolerant implementations they are commonly realized through magic-state injection and distillation~\cite{litinski2019magic}. Therefore, an efficient simulation workflow should exploit stabilizer simulation for the Clifford portion of a circuit while isolating the remaining non-Clifford resources.
 
 This project investigates \textbf{Pauli-based computation (PBC)} as a bridge between these two regimes. PBC rewrites quantum computation in terms of adaptive multi-qubit Pauli measurements acting on magic-state resources. After replacing T gates with T-gadgets, Clifford evolution can be absorbed into Pauli-frame tracking and transformed into Pauli measurements, leaving the non-stabilizer content concentrated in the magic-state inputs~\cite{yoganathan2019quantum,peres2025reducing}. This representation is naturally compatible with stabilizer-based QEC simulation.
 
 Our central research question is:
 
 \begin{quote}
-\emph{How can Pauli-based computation be integrated with a stabilizer-based QEC simulator to transform small Clifford+T circuits into measurement-driven Pauli operations while isolating the remaining T-gate resources for magic-state distillation?}
+\emph{How can Pauli-based computation be integrated with a stabilizer-based QEC simulator to transform small Clifford and T circuits into measurement-driven Pauli operations while isolating the remaining T-gate resources for magic-state distillation?}
 \end{quote}
 
 The goal is not to build a complete surface-code architecture or full physical magic-state factory. Instead, we will develop a focused prototype that demonstrates the PBC transformation, validates functional equivalence on small circuits, and estimates the fault-tolerant resources associated with the remaining non-Clifford operations.
