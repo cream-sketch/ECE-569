@@ -4,7 +4,9 @@ Course project repository for **CSC/ECE 569 Quantum Computing**.
 
 ## Project
 
-**Extending Stabilizer-Based QEC Simulation with Pauli-Based Computation for Clifford+T Circuits**
+**QEC Simulation-(3) Pauli-Based Computation**
+
+Team members: Yongxiang Lyu, Sheng Chen, and Zhuozi Xie.
 
 This project studies how Clifford+T circuits can be transformed into a Pauli-based, measurement-driven representation that is compatible with stabilizer/QEC simulation. The main prototype will:
 
