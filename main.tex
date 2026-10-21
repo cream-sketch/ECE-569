@@ -8,13 +8,13 @@
 \usepackage{titlesec}
 
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{2.5pt}
+\setlength{\parskip}{2.3pt}
 \setlist[itemize]{leftmargin=1.1em,itemsep=0pt,topsep=1pt}
 \setlist[enumerate]{leftmargin=1.35em,itemsep=0pt,topsep=1pt}
 \titleformat{\section}{\bfseries\large}{}{0pt}{}[\vspace{-2pt}\titlerule]
 \titlespacing*{\section}{0pt}{4pt}{2pt}
 
-\title{\vspace{-1.35cm}\textbf{T-State Injection and Magic-State Resource Estimation}\\
+\title{\vspace{-1.35cm}\textbf{Logical T-State Injection and Resource Estimation}\\
 \large QEC Simulation-(3) Pauli-Based Computation}
 \author{Yongxiang Lyu \qquad Sheng Chen \qquad Zhuozi Xie}
 \date{}
@@ -26,71 +26,69 @@
 \textbf{Course:} CSC/ECE 569 Quantum Computing \hfill
 \textbf{Repository:} \href{https://github.com/cream-sketch/ECE-569}{github.com/cream-sketch/ECE-569}
 
-\section{Motivation and Focus}
+\section{Motivation and Problem Definition}
 
-Stim and LightStim efficiently simulate stabilizer/QEC circuits containing Clifford operations, Pauli measurements, and Pauli noise, but Stim does not support non-Clifford gates such as T directly~\cite{gidney2021stim}. Pauli-based computation (PBC) motivates separating these two regimes: Clifford processing remains in the stabilizer/measurement domain, while the non-Clifford content appears as T-type magic-state resources~\cite{peres2022pbc}.
+Pauli-based computation (PBC) separates the easy and hard parts of fault-tolerant quantum computation. Clifford operations and Pauli measurements remain in the stabilizer domain and can be simulated efficiently by tools such as Stim/LightStim, while the non-Clifford content of a Clifford+T circuit appears as T-type magic-state resources~\cite{gidney2021stim,peres2022pbc}. Once these T resources are exposed, the practical problem is how to \emph{supply and consume them fault tolerantly}.
 
-Rather than implementing a complete PBC compiler, this project focuses on two concrete problems:
+This project focuses on two concrete questions:
 \begin{enumerate}
-\item \textbf{T-state preparation/injection:} replace an explicit T gate with a prepared magic state plus Clifford operations, measurement, and feed-forward.
-\item \textbf{Resource estimation:} given a circuit T-count and target T-state error, estimate the number of distillation rounds and raw magic states required.
+\item \textbf{Logical T-state preparation/injection:} how can a prepared magic state be consumed through a Clifford-and-measurement gadget to realize a logical T gate?
+\item \textbf{Magic-state resource estimation:} given T-count/T-depth and a target logical error, how many distillation rounds, raw states, and potentially parallel factories are required?
 \end{enumerate}
-This scope gives the project one implementation problem and one quantitative resource-analysis problem.
+The first establishes the execution primitive; the second quantifies its cost. We do not attempt a complete PBC compiler or full surface-code architecture.
 
-\section{Problem 1: T-State Preparation and T-Gate Injection}
+\section{Problem 1: From a Magic State to a Logical T Gate}
 
-The T gate is $T=\mathrm{diag}(1,e^{i\pi/4})$, and its magic state is
+The T gate is $T=\mathrm{diag}(1,e^{i\pi/4})$, with magic state
 \[
-|T\rangle=T|+\rangle=
-\frac{|0\rangle+e^{i\pi/4}|1\rangle}{\sqrt{2}}.
+|T\rangle=T|+\rangle=\frac{|0\rangle+e^{i\pi/4}|1\rangle}{\sqrt{2}}.
 \]
-Preparing $|T\rangle$ by simply applying an ideal T gate is useful as a mathematical reference, but it does not solve the fault-tolerant problem because it assumes the non-Clifford operation that must ultimately be supplied. Fault-tolerant schemes instead prepare this resource offline and consume it through magic-state injection~\cite{bravyi2005magic}.
+An ideal $|T\rangle$ can be generated using an ideal T gate for verification, but this is only a reference model. In a fault-tolerant implementation, the non-stabilizer resource must be prepared independently and injected into the data path.
 
-We will implement a T-injection gadget using a data qubit $|\psi\rangle$ and an ancilla $|T\rangle$:
+We will implement a standard T-injection gadget:
 \begin{enumerate}
-\item prepare the ancilla in $|T\rangle$;
+\item prepare an ancilla in $|T\rangle$;
 \item apply $\mathrm{CNOT}(\mathrm{data}\rightarrow\mathrm{ancilla})$;
 \item measure the ancilla in the Z basis;
-\item for measurement outcome 1, apply an S correction to the data qubit.
+\item for outcome 1, apply an S correction to the data qubit.
 \end{enumerate}
-For outcome 0, the data becomes $T|\psi\rangle$. For outcome 1, the uncorrected branch is $T^\dagger|\psi\rangle$ up to global phase; the Clifford S correction yields $T|\psi\rangle$. Thus, once the magic state is supplied, the online gadget uses only Clifford operations, measurement, and feed-forward.
+For outcome 0, the data becomes $T|\psi\rangle$. For outcome 1, the uncorrected branch is $T^\dagger|\psi\rangle$ up to global phase, and the Clifford S correction yields $T|\psi\rangle$. Thus, once the magic state is available, the online operation uses only Clifford gates, measurement, and classical feed-forward~\cite{bravyi2005magic}.
 
-\textbf{Implementation.} We will use Qiskit/statevector simulation to generate the ideal $|T\rangle$ reference and verify the injection gadget. Stim/LightStim will represent the surrounding Clifford operations, measurements, Pauli-frame corrections, and QEC circuitry. We will treat the magic state itself as the boundary to the non-Clifford model rather than claim that Stim directly represents its non-stabilizer amplitudes.
+\textbf{Why preparation matters.} The difficult part is obtaining a sufficiently accurate logical magic state. The conventional route is magic-state distillation. A complementary route is code switching. Daguerre \emph{et al.} experimentally prepared a high-fidelity logical magic state by switching from a 15-qubit quantum Reed--Muller code to the 7-qubit Steane code~\cite{daguerre2025codeswitch}. We will not reproduce that code-switching experiment; instead, it motivates treating state preparation as an independent subsystem whose output feeds the same injection primitive.
 
-\textbf{Correctness experiment.} For $|0\rangle$, $|1\rangle$, $|+\rangle$, $|-\rangle$, and several random one-qubit inputs, we will compare a direct ideal T gate with injection. Output-state fidelity is the main metric; in the noiseless case the target is unit fidelity up to numerical precision. We will verify both measurement branches and test a small multi-T circuit to confirm that multiple injection gadgets compose correctly.
+\textbf{Experiment A -- Injection correctness.} Using Qiskit/statevector simulation, we will compare a direct ideal T gate with the $|T\rangle$-injection gadget for $|0\rangle$, $|1\rangle$, $|+\rangle$, $|-\rangle$, and random one-qubit states. We will verify both measurement branches and report output-state fidelity. A small multi-T circuit will test composition. Stim/LightStim will model the surrounding Clifford/measurement/QEC structure rather than the non-stabilizer amplitudes of $|T\rangle$ itself.
 
-\section{Problem 2: Magic-State Distillation Resource Estimation}
+\section{Problem 2: Resource Estimation for Supplying T States}
 
-After PBC or another Clifford+T analysis identifies the T resources, the next problem is their production cost. We will implement a resource estimator based on a single standard protocol, \textbf{15-to-1 T-state distillation}, rather than model every possible factory.
-
-For sufficiently small input error $p$, a leading-order model is~\cite{bravyi2005magic}
+Once T resources are identified, the next question is their production cost. We will use \textbf{15-to-1 T-state distillation} as a baseline. For sufficiently small input error $p$,
 \[
-p_{\mathrm{out}}\approx 35p^3.
-\]
-For repeated rounds,
-\[
-p_{r+1}\approx 35p_r^3.
+p_{\mathrm{out}}\approx 35p^3,\qquad p_{r+1}\approx 35p_r^3.
 \]
 Ignoring rejection/retry overhead in the first-order model, each round multiplies raw-state demand by 15:
 \[
 N_{\mathrm{raw/out}}\approx 15^r.
 \]
+Thus $p_{\mathrm{raw}}=10^{-2}$ gives approximately $3.5\times10^{-5}$ after one round; a second round suppresses the error much further but raises the idealized raw-state cost from 15 to 225 states per final T state.
 
-The estimator inputs are circuit T-count $N_T$, raw-state error $p_{\mathrm{raw}}$, and target error $p_{\mathrm{target}}$. Optionally, an algorithm-level failure budget $\epsilon$ can define a simple per-T target such as $\epsilon/N_T$. Outputs will include the minimum number of rounds, error after each round, raw states per output, total raw states $N_T15^r$, and the number of high-fidelity T states consumed. With simple timing/parallelism assumptions, we will also report an estimated latency or throughput.
+The estimator inputs will be T-count $N_T$, T-depth $D_T$ (or an equivalent consumption schedule), raw-state error $p_{\mathrm{raw}}$, and target error $p_{\mathrm{target}}$. An algorithm-level failure budget $\epsilon$ may define a first-order requirement such as $p_{\mathrm{target}}\leq\epsilon/N_T$. Outputs will include minimum distillation rounds, output error after each round, raw states per output, total raw states, and high-fidelity T states consumed.
 
-For example, $p_{\mathrm{raw}}=10^{-2}$ gives approximately $3.5\times10^{-5}$ after one idealized 15-to-1 round. A second round suppresses the error much further but raises the ideal raw-state cost from 15 to 225 states per final output. This directly exposes the fidelity-versus-resource tradeoff.
+We will also add a simple throughput model. Litinski's surface-code analysis shows that magic-state factories create an important \textbf{space--time tradeoff}: additional parallel distillation hardware can supply T states faster, while fewer factories reduce qubit cost but may stall T-heavy computation~\cite{litinski2019game}. Under simple timing assumptions, the estimator will therefore report factory throughput or parallelism for selected T-depth/consumption-rate scenarios.
 
-\section{Evaluation, Scope, and Deliverables}
+\textbf{Experiment B -- Resource scaling.} We will sweep $N_T=10,50,100,500,1000$, representative raw-state errors such as $10^{-2}$ and $10^{-3}$, several target-error budgets, and selected T-depth scenarios. Plots will show (1) distillation rounds vs.\ target error, (2) raw states vs.\ T-count, (3) raw states vs.\ target fidelity, and (4) factory parallelism/latency vs.\ T-consumption rate.
 
-\textbf{Experiment A -- Injection correctness.} We will report direct-T vs.\ injected-T fidelity, correctness of both measurement/feed-forward branches, Clifford gate count, measurement/correction count, and magic states consumed per T operation.
+\section{Scope, Expected Outcome, and Timeline}
 
-\textbf{Experiment B -- Resource scaling.} We will sweep representative T-counts $N_T=10,50,100,500,1000$, raw-state errors such as $10^{-2}$ and $10^{-3}$, and multiple target-error levels. Plots will show distillation rounds vs.\ target error, raw states vs.\ T-count, raw states vs.\ target fidelity, and total magic-state cost.
+The project starts after PBC or a Clifford+T analysis has exposed the T resources. We will not implement a complete PBC compiler, code-switching protocol, full lattice-surgery scheduler, or detailed physical magic-state factory.
 
-The project intentionally excludes a complete PBC compiler, full surface-code scheduling, lattice surgery, and a detailed physical magic-state factory. PBC provides the interface: it isolates T resources, and our work starts at that boundary.
+The expected workflow is:
+\[
+\text{T resource identified}\rightarrow
+\text{injection verified}\rightarrow
+\text{required fidelity specified}\rightarrow
+\text{resource cost estimated}.
+\]
 
-Minimum deliverables are: (1) T-state/injection code and correctness tests; (2) a 15-to-1 resource estimator; (3) small Clifford+T integration examples; (4) resource-scaling plots/tables; and (5) documented limitations.
-
-\section{Timeline}
+Minimum deliverables are: (1) T-state/injection code and correctness tests; (2) a 15-to-1 distillation estimator; (3) optional T-depth/factory-throughput estimates; (4) small Clifford+T examples; and (5) resource-scaling plots/tables.
 
 \begin{center}
 \small
@@ -98,12 +96,12 @@ Minimum deliverables are: (1) T-state/injection code and correctness tests; (2) 
 \toprule
 \textbf{Period} & \textbf{Planned Work} \\
 \midrule
-Week 1 & Review Stim/LightStim, T injection, and 15-to-1 distillation \\
-Week 2 & Implement ideal $|T\rangle$ reference and injection; verify both branches \\
-Week 3 & Test multi-T examples and connect Clifford/measurement portions to Stim/LightStim \\
-Week 4 & Implement 15-to-1 error/cost recurrence and resource estimator \\
-Week 5 & Sweep T-count/error targets and generate resource plots \\
-Week 6 & Integrate results, document limitations, and prepare final report \\
+Week 1 & Review PBC, T injection, code switching, and 15-to-1 distillation \\
+Week 2 & Implement ideal/noisy $|T\rangle$ model and injection; verify both branches \\
+Week 3 & Test multi-T examples and surrounding Clifford/measurement simulation \\
+Week 4 & Implement distillation error and raw-state resource estimator \\
+Week 5 & Add T-depth/factory-throughput model and run scaling experiments \\
+Week 6 & Analyze results, generate plots, and prepare final report \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -112,5 +110,4 @@ Week 6 & Integrate results, document limitations, and prepare final report \\
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 }
-
 \end{document}
