@@ -4,39 +4,21 @@ Course project repository for **CSC/ECE 569 Quantum Computing**.
 
 ## Project
 
-**QEC Simulation-(3) Pauli-Based Computation**
+**QEC Simulation-(3) Pauli-Based Computation — T-State Injection and Resource Estimation**
 
 Team members: Yongxiang Lyu, Sheng Chen, and Zhuozi Xie.
 
-This project studies how Clifford+T circuits can be transformed into a Pauli-based, measurement-driven representation that is compatible with stabilizer/QEC simulation. The main prototype will:
+This project intentionally focuses on two concrete problems at the stabilizer/non-Clifford boundary:
 
-- classify Clifford and T operations;
-- propagate Pauli operators through Clifford gates;
-- track Pauli-frame updates classically;
-- generate Pauli-measurement sequences;
-- isolate T gates as magic-state resources;
-- validate supported circuits with Stim/LightStim; and
-- estimate magic-state/distillation overhead.
+1. implement and validate T-state preparation / magic-state injection;
+2. estimate the distillation resources needed to supply the T states required by a Clifford+T circuit.
+
+The baseline resource model uses 15-to-1 T-state distillation and reports required rounds, output error, and raw-state demand as functions of T-count and target fidelity.
 
 ## Proposal
 
-See [proposal.md](proposal.md) for the two-page project proposal, methodology, evaluation plan, timeline, and references.
-
-## Planned Repository Structure
-
-```text
-ECE-569/
-├── README.md
-├── proposal.md
-├── src/
-│   ├── compiler/
-│   └── resource_model/
-├── benchmarks/
-├── experiments/
-├── results/
-└── docs/
-```
+See [proposal.md](proposal.md) and [main.tex](main.tex) for the focused project proposal.
 
 ## Status
 
-Proposal and project setup in progress.
+Focused proposal and project setup in progress.
