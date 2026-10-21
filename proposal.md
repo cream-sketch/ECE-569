@@ -1,101 +1,125 @@
-# Project Proposal: QEC Simulation-(3) Pauli-Based Computation
+# Project Proposal: T-State Injection and Magic-State Resource Estimation for Pauli-Based QEC Simulation
 
 **Course:** CSC/ECE 569 Quantum Computing  
-**Project:** Project 6 — QEC Simulation  
 **Project ID:** QEC Simulation-(3) Pauli-Based Computation  
 **Team members:** Yongxiang Lyu, Sheng Chen, Zhuozi Xie  
 **Repository:** https://github.com/cream-sketch/ECE-569
 
-## 1. Problem Description and Motivation
+## 1. Motivation and Focus
 
-Fault-tolerant quantum computation must support universal circuits while keeping the overhead of quantum error correction manageable. Stabilizer circuits, consisting of Clifford operations, Pauli measurements, and stabilizer-state preparation, are especially attractive because they can be simulated efficiently on a classical computer. Stim is a high-performance stabilizer circuit simulator that is designed for this regime and is widely used to study quantum error-correction circuits. LightStim builds higher-level QEC abstractions on top of Stim, including encodings, syndrome extraction, noise models, and decoding workflows.
+Stim and LightStim are well suited to stabilizer/QEC circuits containing Clifford operations, Pauli measurements, and Pauli noise. Universal Clifford+T computation, however, also requires the non-Clifford T gate, which is outside ordinary stabilizer simulation. Pauli-based computation motivates separating these two parts: Clifford processing remains in the stabilizer/measurement domain, while the non-Clifford content appears as T-type magic-state resources.
 
-The main limitation is that a universal quantum circuit also requires non-Clifford operations. In the commonly used Clifford+T gate set, the T gate is the essential non-Clifford resource. Stim itself does not natively simulate arbitrary T gates as part of a stabilizer circuit, and in fault-tolerant implementations T gates are typically realized through magic-state injection, with high-fidelity magic states produced by a distillation protocol. Therefore, a useful QEC simulation workflow should separate the efficiently simulable Clifford structure from the expensive non-Clifford resources.
+Rather than implementing a complete PBC compiler, this project focuses on two concrete problems at this stabilizer/non-Clifford boundary:
 
-This project investigates **Pauli-based computation (PBC)** as a bridge between these two regimes. PBC represents a quantum computation using adaptive multi-qubit Pauli measurements acting on magic-state resources. A Clifford+T circuit can first be rewritten using T-gadgets, after which Clifford evolution can be absorbed into classical Pauli-frame tracking and transformed into a sequence of Pauli measurements. The remaining non-stabilizer content is then isolated in the magic-state inputs associated with T gates. This representation is particularly compatible with stabilizer-based QEC simulators because the Clifford and Pauli-measurement portions remain in the efficiently simulable stabilizer domain.
+1. **T-state preparation and T-gate injection:** how to replace an explicit T gate with a prepared magic state plus Clifford operations, measurement, and feed-forward.
+2. **Magic-state resource estimation:** given a circuit T-count and a target T-state error, how many distillation rounds and raw magic states are needed.
 
-Our central research question is:
+This scope gives the project one implementation problem and one quantitative resource-analysis problem.
 
-> **How can Pauli-based computation be integrated with a stabilizer-based QEC simulator to transform small Clifford+T circuits into measurement-driven Pauli operations while isolating the remaining T-gate resources for magic-state distillation?**
+## 2. Problem 1 — T-State Preparation and T-Gate Injection
 
-The goal is not to build a complete surface-code architecture or a full physical magic-state factory. Instead, we will develop a focused prototype that demonstrates the PBC transformation, validates functional equivalence on small circuits, and estimates the fault-tolerant resources associated with the remaining non-Clifford operations.
+The T gate is T = diag(1, exp(i*pi/4)). Its corresponding magic state is |T> = T|+> = (|0> + exp(i*pi/4)|1>)/sqrt(2). Preparing |T> by simply applying an ideal T gate is useful as a mathematical reference, but it does not solve the fault-tolerant problem because it assumes the non-Clifford operation that must ultimately be supplied fault-tolerantly. In a fault-tolerant workflow, the non-stabilizer resource is prepared offline, purified/distilled when necessary, and consumed through magic-state injection.
 
-## 2. Proposed Approach
+We will implement and verify a standard T-injection gadget. Given a data qubit |psi> and an ancilla in |T>, the gadget performs:
 
-The project will use **Python**, **Stim**, and **LightStim** as the primary software environment, with Qiskit used when convenient for generating or independently validating Clifford+T benchmark circuits.
+1. prepare the ancilla resource in |T>;
+2. apply CNOT(data -> ancilla);
+3. measure the ancilla in the Z basis;
+4. if the measurement result is 1, apply an S correction to the data qubit.
 
-### Stage 1 — Baseline stabilizer/QEC simulation
+For measurement outcome 0, the data becomes T|psi>. For outcome 1, the uncorrected branch is T^dagger|psi> up to global phase; applying the Clifford S correction yields T|psi>. Thus, once the magic state is available, the remaining online gadget uses only Clifford operations, measurement, and classical feed-forward.
 
-We will first reproduce several small Clifford-only circuits in Stim/LightStim to establish a working baseline. The circuits will contain gates such as H, S, CNOT, Pauli operations, and measurements. We will record circuit depth, gate count, measurement count, and simulation runtime. This step will also familiarize us with LightStim's circuit construction and QEC abstractions.
+### Implementation plan
 
-### Stage 2 — Clifford+T circuit front end
+- **Qiskit/statevector verification:** generate the ideal |T> reference state and compare the injection gadget with a direct ideal T gate.
+- **Stim/LightStim interface:** represent the surrounding Clifford gates, measurements, Pauli-frame corrections, and QEC circuitry. We will treat the magic state itself as the non-Clifford resource boundary instead of claiming that Stim directly represents its non-stabilizer amplitudes.
+- **Optional noisy-resource model:** attach an input magic-state error probability p_raw and study the logical effect of imperfect resource states.
 
-We will build or import small Clifford+T circuits and classify every operation as Clifford or non-Clifford. The initial benchmark range will be approximately **4–10 logical qubits** and **20–200 gates**, with several T-gate densities (for example 5%, 10%, 20%, and 30%). The compiler front end will record the original number of Clifford gates, T gates, two-qubit gates, circuit depth, and ancillas.
+### Correctness experiment
 
-### Stage 3 — Pauli-based transformation
+For |0>, |1>, |+>, |->, and several random one-qubit states, we will compare a direct ideal T gate with the injection gadget. The primary metric is output-state fidelity. In the noiseless case, the expected fidelity is 1 up to numerical precision. We will also verify both measurement branches and their feed-forward correction. A small circuit containing multiple T gates will test whether several injection gadgets compose correctly.
 
-The core contribution will be a restricted PBC compiler prototype. We will implement Clifford conjugation rules for Pauli operators and maintain a classical Pauli frame. Supported Clifford segments will be propagated into Pauli-frame updates and measurement operators instead of being simulated as explicit logical gates whenever possible. T gates will be converted into magic-state/T-gadget resources, and the resulting computation will be represented as an adaptive sequence of Pauli measurements plus classical feed-forward information.
+This experiment answers a precise implementation question: **Can an explicit T operation be replaced by a magic-state injection primitive while leaving the online execution in Clifford/measurement form?**
 
-For each transformed circuit, the prototype will output:
+## 3. Problem 2 — Magic-State Distillation Resource Estimation
 
-- the generated Pauli-measurement sequence;
-- the Pauli-frame/classical correction information;
-- the number and weight of Pauli measurements;
-- the number of remaining T/magic-state resources; and
-- the corresponding stabilizer/QEC circuit that can be evaluated with Stim/LightStim where supported.
+After PBC or another Clifford+T analysis identifies the number of T resources, the next problem is their production cost. We will build a resource estimator around one standard protocol, 15-to-1 T-state distillation, instead of modeling every possible factory.
 
-### Stage 4 — Magic-state resource model
+For sufficiently small input error p, a standard leading-order model is:
 
-The non-Clifford portion will be modeled as magic-state demand. The baseline model will assume one injected high-fidelity magic state per logical T resource and will estimate the number of states that must be supplied by a distillation layer. We will use published magic-state distillation results to define a simple cost model rather than implementing a complete physical factory. If time permits, a supported distillation circuit will be simulated in LightStim as a stretch goal.
+p_out ~= 35 * p^3
 
-## 3. Evaluation Plan
+For repeated rounds:
 
-We will evaluate both **correctness** and **resource cost**.
+p_(r+1) ~= 35 * (p_r)^3
 
-First, for small noiseless examples, we will compare the output distribution or logical measurement results of the original Clifford+T circuit with the PBC-transformed representation. This establishes that the transformation preserves the intended computation.
+Ignoring rejection/retry overhead in the first-order model, each round multiplies raw-state demand by 15:
 
-Second, we will compare the original and transformed representations using:
+raw states per distilled output ~= 15^r
 
-- explicit Clifford-gate count;
-- T count / magic-state count;
-- number of Pauli measurements;
-- average and maximum Pauli-measurement weight;
-- circuit depth or measurement depth;
-- ancilla count;
-- simulation runtime; and
-- estimated magic-state/distillation overhead.
+### Estimator inputs
 
-The main expected result is that a large fraction of explicit Clifford evolution can be absorbed into Pauli-frame and measurement processing, while the T gates remain visible as the dominant non-Clifford fault-tolerant resource. We will also study how the measurement cost and magic-state demand scale with circuit size and T density.
+- circuit T-count N_T;
+- raw magic-state error probability p_raw;
+- required target magic-state error p_target;
+- optionally, an algorithm-level failure budget epsilon, from which a simple per-T target such as epsilon / N_T can be derived.
 
-## 4. Scope and Deliverables
+### Estimator outputs
 
-The minimum viable project will support small Clifford+T circuits, implement a correct PBC transformation for the supported gate set, verify the transformed circuits, and report T/magic-state resource requirements. Full surface-code scheduling, detailed lattice-surgery routing, hardware-specific connectivity optimization, and a complete magic-state factory are outside the primary scope.
+- minimum number of distillation rounds;
+- estimated output error after each round;
+- raw T states required per high-fidelity output;
+- total raw T states required for the circuit;
+- number of high-fidelity T states consumed, equal to N_T;
+- and, when simple timing/parallelism assumptions are supplied, an estimated latency or factory throughput.
 
-The final deliverables will include:
+For example, if p_raw = 10^-2, one idealized 15-to-1 round gives p_out ~= 3.5e-5. A second round suppresses the error much further but raises the ideal raw-state cost from 15 to 225 input states per final output. This exposes the tradeoff we want to quantify: stronger fidelity requirements can rapidly increase resource demand.
 
-1. a documented Python implementation in this GitHub repository;
-2. benchmark Clifford+T circuits and reproducible experiment scripts;
-3. Stim/LightStim-based validation where applicable;
-4. plots/tables comparing original and PBC representations;
-5. a simple magic-state/distillation resource model; and
-6. a final report summarizing correctness, resource trends, limitations, and future work.
+## 4. Evaluation
 
-## 5. Timeline
+### Experiment A — Injection correctness
+
+We will report direct-T vs. injected-T fidelity, correctness of both measurement branches, Clifford gate count, measurement count, correction count, and magic states consumed per injected T. A small multi-T circuit will provide an end-to-end sanity check.
+
+### Experiment B — Distillation resource scaling
+
+We will sweep representative T-counts N_T = 10, 50, 100, 500, 1000, several raw-state error rates such as 10^-2 and 10^-3, and multiple target error levels. The main plots/tables will show:
+
+1. distillation rounds vs. target error;
+2. raw magic states vs. T-count;
+3. raw magic states vs. target fidelity;
+4. total magic-state cost for circuits with different T-counts.
+
+The estimator will also be applied to a few small Clifford+T benchmark circuits by counting their T gates and converting that count into a magic-state requirement.
+
+## 5. Scope and Deliverables
+
+The project intentionally does **not** attempt to implement a complete PBC compiler, a full surface-code architecture, lattice-surgery scheduling, or a detailed physical magic-state factory. PBC provides the motivation and interface: it isolates the T resources, and our work starts at that boundary.
+
+Minimum deliverables:
+
+1. Python implementation of T-state preparation/reference generation and T-gate injection;
+2. correctness tests comparing direct and injected T operations;
+3. a 15-to-1 magic-state distillation resource estimator;
+4. experiments showing how T-count, raw-state quality, and target fidelity affect resource cost;
+5. small Clifford+T integration examples;
+6. documentation and plots in the repository.
+
+## 6. Timeline
 
 | Period | Planned work |
 |---|---|
-| Week 1 | Read Stim, LightStim, PBC, and magic-state references; reproduce baseline stabilizer circuits |
-| Week 2 | Build Clifford+T parser/generator and baseline metrics |
-| Week 3 | Implement Clifford-to-Pauli propagation and Pauli-frame tracking |
-| Week 4 | Generate adaptive PBC measurement sequences and validate small examples |
-| Week 5 | Add magic-state resource model and integrate supported workflows with LightStim |
-| Week 6 | Run scaling experiments, generate plots, analyze results, and prepare the final report |
+| Week 1 | Review Stim/LightStim, T injection, and 15-to-1 distillation |
+| Week 2 | Implement ideal |T> reference and T-injection gadget; verify both branches |
+| Week 3 | Test multi-T examples and connect Clifford/measurement portions to Stim/LightStim |
+| Week 4 | Implement 15-to-1 error/cost recurrence and resource estimator |
+| Week 5 | Sweep T-count/error targets and generate resource plots |
+| Week 6 | Integrate results, document limitations, and prepare final report |
 
 ## References
 
-1. C. Gidney, **“Stim: a fast stabilizer circuit simulator,”** *Quantum* 5, 497 (2021). https://doi.org/10.22331/q-2021-07-06-497
-2. QuTone, **LightStim: A QEC Evaluator built on Stim**, GitHub repository. https://github.com/QuTone/LightStim
-3. M. Yoganathan, R. Jozsa, and S. Strelchuk, **“Quantum advantage of unitary Clifford circuits with magic state inputs,”** *Proceedings of the Royal Society A* 475, 20180427 (2019). https://doi.org/10.1098/rspa.2018.0427
-4. F. C. R. Peres and E. F. Galvão, **“Reducing Depth and Measurement Weights in Pauli-based Computation,”** *Physical Review A* 112, 062604 (2025). https://doi.org/10.1103/d3x5-cgky
-5. D. Litinski, **“Magic State Distillation: Not as Costly as You Think,”** arXiv:1905.06903 (2019). https://arxiv.org/abs/1905.06903
-6. Stim project repository and documentation. https://github.com/quantumlib/Stim
+1. C. Gidney, “Stim: a fast stabilizer circuit simulator,” Quantum 5, 497 (2021).
+2. QuTone, “LightStim: A QEC Evaluator built on Stim,” GitHub repository.
+3. S. Bravyi and A. Kitaev, “Universal quantum computation with ideal Clifford gates and noisy ancillas,” Physical Review A 71, 022316 (2005).
+4. F. C. R. Peres and E. F. Galvao, “Quantum circuit compilation and hybrid computation using Pauli-based computation,” arXiv:2203.01789.
+5. D. Litinski, “Magic State Distillation: Not as Costly as You Think,” arXiv:1905.06903 (2019).
