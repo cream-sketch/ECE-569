@@ -1,0 +1,118 @@
+\documentclass[10pt]{article}
+
+\usepackage[letterpaper,margin=0.62in]{geometry}
+\usepackage{newtxtext,newtxmath}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\usepackage{xcolor}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\setlist[itemize]{leftmargin=1.15em,itemsep=1pt,topsep=2pt}
+\setlist[enumerate]{leftmargin=1.25em,itemsep=1pt,topsep=2pt}
+
+\titleformat{\section}
+  {\bfseries\large}
+  {}
+  {0pt}
+  {}
+  [\vspace{-2pt}\titlerule]
+
+\titlespacing*{\section}{0pt}{5pt}{3pt}
+
+\title{\vspace{-1.3cm}\textbf{QEC Simulation-(3) Pauli-Based Computation}\\
+\large Project Proposal -- CSC/ECE 569 Quantum Computing}
+\author{Yongxiang Lyu \qquad Sheng Chen \qquad Zhuozi Xie}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-1.0em}
+
+\textbf{Repository:}
+\href{https://github.com/cream-sketch/ECE-569}
+{https://github.com/cream-sketch/ECE-569}
+
+\section{Problem Description and Motivation}
+
+Fault-tolerant quantum computation must support universal circuits while keeping the overhead of quantum error correction (QEC) manageable. Stabilizer circuits, composed of Clifford operations, Pauli measurements, and stabilizer-state preparation, are attractive because they can be simulated efficiently on a classical computer. Stim is a high-performance stabilizer circuit simulator designed for this regime~\cite{gidney2021stim}, while LightStim provides higher-level QEC abstractions built around stabilizer simulation.
+
+The main challenge is that a universal quantum circuit also requires non-Clifford operations. In the commonly used Clifford+T gate set, the T gate is the essential non-Clifford resource. T gates cannot be handled directly by the standard stabilizer formalism, and in fault-tolerant implementations they are commonly realized through magic-state injection and distillation~\cite{litinski2019magic}. Therefore, an efficient simulation workflow should exploit stabilizer simulation for the Clifford portion of a circuit while isolating the remaining non-Clifford resources.
+
+This project investigates \textbf{Pauli-based computation (PBC)} as a bridge between these two regimes. PBC rewrites quantum computation in terms of adaptive multi-qubit Pauli measurements acting on magic-state resources. After replacing T gates with T-gadgets, Clifford evolution can be absorbed into Pauli-frame tracking and transformed into Pauli measurements, leaving the non-stabilizer content concentrated in the magic-state inputs~\cite{yoganathan2019quantum,peres2025reducing}. This representation is naturally compatible with stabilizer-based QEC simulation.
+
+Our central research question is:
+
+\begin{quote}
+\emph{How can Pauli-based computation be integrated with a stabilizer-based QEC simulator to transform small Clifford+T circuits into measurement-driven Pauli operations while isolating the remaining T-gate resources for magic-state distillation?}
+\end{quote}
+
+The goal is not to build a complete surface-code architecture or full physical magic-state factory. Instead, we will develop a focused prototype that demonstrates the PBC transformation, validates functional equivalence on small circuits, and estimates the fault-tolerant resources associated with the remaining non-Clifford operations.
+
+\section{Proposed Approach}
+
+\textbf{Stage 1: Baseline stabilizer/QEC simulation.}
+We will first reproduce several small Clifford-only circuits in Stim/LightStim using H, S, CNOT, Pauli operations, and measurements. This establishes a reference implementation and familiarizes the team with stabilizer-tableau and QEC workflows.
+
+\textbf{Stage 2: Clifford+T circuit front end.}
+We will build or import small Clifford+T circuits and classify every operation as Clifford or non-Clifford. Initial benchmarks will target approximately 4--10 logical qubits and 20--200 gates, with several T-gate densities (e.g., 5\%, 10\%, 20\%, and 30\%). We will record the original Clifford count, T count, two-qubit gate count, depth, and ancilla count.
+
+\textbf{Stage 3: Pauli-based transformation.}
+The core contribution will be a restricted PBC compiler prototype. We will implement Clifford conjugation rules for Pauli operators and maintain a classical Pauli frame. Supported Clifford segments will be propagated into Pauli-frame updates and measurement operators rather than retained as explicit logical gates whenever possible. T gates will be represented as magic-state/T-gadget resources. The transformed representation will contain an adaptive Pauli-measurement sequence together with classical feed-forward information.
+
+For each circuit, the tool will output:
+\begin{itemize}
+    \item the Pauli-measurement sequence and Pauli-frame updates;
+    \item the number and weight of Pauli measurements;
+    \item the number of remaining T/magic-state resources; and
+    \item a stabilizer/QEC representation that can be checked with Stim/LightStim where supported.
+\end{itemize}
+
+\textbf{Stage 4: Magic-state resource model.}
+The remaining non-Clifford portion will be modeled as magic-state demand. Our baseline model will assume one injected high-fidelity magic state per logical T resource and estimate the states that must be supplied by a distillation layer. We will use published magic-state distillation results to define a simple resource model rather than implementing a full physical factory.
+
+\section{Evaluation Plan}
+
+We will evaluate both \textbf{correctness} and \textbf{resource cost}. For small noiseless examples, we will compare the logical measurement results or output distributions of the original Clifford+T circuit and the PBC-transformed representation. We will then compare:
+\begin{itemize}
+    \item explicit Clifford-gate count and T count;
+    \item Pauli-measurement count and measurement weight;
+    \item circuit or measurement depth;
+    \item ancilla usage;
+    \item simulation runtime; and
+    \item estimated magic-state/distillation overhead.
+\end{itemize}
+
+The expected trend is that a large fraction of explicit Clifford evolution can be absorbed into Pauli-frame and measurement processing, while the T gates remain visible as the dominant non-Clifford fault-tolerant resource. We will also study how measurement cost and magic-state demand scale with circuit size and T density.
+
+\section{Scope, Deliverables, and Timeline}
+
+The minimum viable project will support small Clifford+T circuits, implement a correct PBC transformation for the supported gate set, verify transformed circuits, and report T/magic-state resource requirements. Full surface-code scheduling, detailed lattice-surgery routing, hardware-specific connectivity optimization, and complete magic-state-factory scheduling are outside the primary scope.
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Period} & \textbf{Planned Work} \\
+\midrule
+Week 1 & Study Stim, LightStim, PBC, and magic-state references; reproduce baselines \\
+Week 2 & Build Clifford+T parser/generator and baseline metrics \\
+Week 3 & Implement Clifford-to-Pauli propagation and Pauli-frame tracking \\
+Week 4 & Generate PBC measurement sequences and validate small examples \\
+Week 5 & Add magic-state resource model and LightStim integration where supported \\
+Week 6 & Run scaling experiments, analyze results, and prepare final report \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Final deliverables will include a documented Python implementation, benchmark circuits, reproducible experiments, comparison plots/tables, a simple distillation-resource model, and the final report.
+
+{\small
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+}
+
+\end{document}
