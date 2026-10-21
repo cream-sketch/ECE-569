@@ -1,10 +1,9 @@
-# Project Proposal: Pauli-Based Computation for Clifford+T QEC Simulation
+# Project Proposal: QEC Simulation-(3) Pauli-Based Computation
 
 **Course:** CSC/ECE 569 Quantum Computing  
 **Project:** Project 6 — QEC Simulation  
-**Topic:** Pauli-based computation for Clifford+T circuits  
-**Team members:** Yongxiang Lyu; *[add teammate name(s) before submission]*  
-**Group number:** *[add group number]*  
+**Project ID:** QEC Simulation-(3) Pauli-Based Computation  
+**Team members:** Yongxiang Lyu, Sheng Chen, Zhuozi Xie  
 **Repository:** https://github.com/cream-sketch/ECE-569
 
 ## 1. Problem Description and Motivation
